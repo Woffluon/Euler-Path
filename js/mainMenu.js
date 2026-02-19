@@ -1,11 +1,26 @@
-import { showScreen, getIconSvg } from './ui.js';
+/**
+ * Main menu screen module.
+ * Displays the game title, information about the game, and a play button.
+ * @module screens/mainMenu
+ */
 
+import { showScreen, getIconSvg } from './utils/ui.js';
+
+/**
+ * Loads and renders the main menu screen.
+ * Creates the main menu UI with game information and navigation to level select.
+ *
+ * @param {HTMLElement} container - The DOM container to render the main menu into
+ */
 export function loadMainMenuScreen(container) {
   container.innerHTML = `
     <div class="main-menu">
       <img
-        src="https://europebetweeneastandwest.wordpress.com/wp-content/uploads/2017/11/a-target-rich-environment-konigsberg-along-the-pregel-river.jpg"
+        src="/images/konigsberg.jpg"
         alt="Königsberg şehrinin Pregel nehri ve köprülerini gösteren tarihi bir çizim."
+        loading="lazy"
+        width="1024"
+        height="724"
       />
       <h1>Königsberg Köprüleri Oyunu</h1>
 
@@ -19,7 +34,7 @@ export function loadMainMenuScreen(container) {
         </p>
       </div>
 
-      <button id="play-button" aria-label="Oyunu başlat">
+      <button id="play-button" class="btn-primary" aria-label="Oyunu başlat">
         ${getIconSvg('Play')} Oyna
       </button>
     </div>
@@ -32,6 +47,6 @@ export function loadMainMenuScreen(container) {
       showScreen('level-select');
     });
   } else {
-    console.error("Play button not found in main menu");
+    console.error('Play button not found in main menu');
   }
 }

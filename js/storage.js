@@ -1,66 +1,76 @@
-// Simple local storage implementation for completed levels
-// Saving/loading is now enabled.
+/**
+ * Storage management module for persisting completed levels.
+ * Uses StorageManager for robust localStorage operations with error handling and fallbacks.
+ *
+ * @module storage
+ */
 
-const COMPLETED_LEVELS_KEY = 'eulerinYoluCompletedLevels';
+import CONFIG from './data/config.js';
+import StorageManager from './core/StorageManager.js';
+
+// Robust local storage implementation for completed levels using StorageManager
+// Provides error handling, quota management, and fallback support
+
+const storageManager = new StorageManager(CONFIG.storage.completedLevelsKey);
 
 /**
- * Gets the set of completed level indices from local storage.
- * @returns {Set<number>} A set of completed level indices.
+ * Gets the set of completed level indices from storage.
+ * Uses StorageManager for robust error handling and fallback support.
+ *
+ * @returns {Set<number>} A set of completed level indices
  */
 export function getCompletedLevels() {
-  try {
-    const storedData = localStorage.getItem(COMPLETED_LEVELS_KEY);
-    if (storedData) {
-      // localStorage stores strings, parse it back to an array, then to a Set
-      const completedArray = JSON.parse(storedData);
-      // Ensure all items are numbers
-      if (Array.isArray(completedArray)) {
-         return new Set(completedArray.filter(item => typeof item === 'number'));
-      }
-    }
-  } catch (error) {
-    console.error("Error loading completed levels from localStorage:", error);
+  const completedArray = storageManager.get([]);
+
+  // Ensure all items are numbers and convert to Set
+  if (Array.isArray(completedArray)) {
+    return new Set(completedArray.filter((item) => typeof item === 'number'));
   }
-  // Return an empty set if no data or error
+
+  // Return empty set if data is invalid
   return new Set();
 }
 
 /**
- * Saves the set of completed level indices to local storage.
- * @param {Set<number>} completedLevelsSet - The set of completed level indices.
+ * Saves the set of completed level indices to storage.
+ * Uses StorageManager for robust error handling and quota management.
+ *
+ * @param {Set<number>} completedLevelsSet - The set of completed level indices
  */
 export function saveCompletedLevels(completedLevelsSet) {
-  try {
-    // Convert Set to Array for JSON stringification
-    const completedArray = Array.from(completedLevelsSet);
-    localStorage.setItem(COMPLETED_LEVELS_KEY, JSON.stringify(completedArray));
-    console.log("Completed levels saved:", completedArray);
-  } catch (error) {
-    console.error("Error saving completed levels to localStorage:", error);
+  // Convert Set to Array for JSON stringification
+  const completedArray = Array.from(completedLevelsSet);
+  const success = storageManager.set(completedArray);
+
+  if (success) {
+    console.log('Completed levels saved:', completedArray);
+  } else {
+    console.warn('Completed levels saved to memory fallback:', completedArray);
   }
 }
 
 /**
  * Marks a specific level as completed and saves the state.
- * @param {number} levelIndex - The index of the level to mark as completed.
+ * Uses StorageManager methods for all storage operations.
+ *
+ * @param {number} levelIndex - The index of the level to mark as completed
  */
 export function markLevelAsCompleted(levelIndex) {
-    const completedLevelsSet = getCompletedLevels();
-    if (!completedLevelsSet.has(levelIndex)) {
-        completedLevelsSet.add(levelIndex);
-        saveCompletedLevels(completedLevelsSet);
-        console.log(`Level ${levelIndex} marked as completed.`);
-    } else {
-        console.log(`Level ${levelIndex} was already completed.`);
-    }
+  const completedLevelsSet = getCompletedLevels();
+  if (!completedLevelsSet.has(levelIndex)) {
+    completedLevelsSet.add(levelIndex);
+    saveCompletedLevels(completedLevelsSet);
+    console.log(`Level ${levelIndex} marked as completed.`);
+  } else {
+    console.log(`Level ${levelIndex} was already completed.`);
+  }
 }
 
-// Optional: Function to clear all completed levels (for testing/debugging)
+/**
+ * Clears all completed levels from storage.
+ * Uses StorageManager.clear() for robust cleanup.
+ */
 export function clearCompletedLevels() {
-    try {
-        localStorage.removeItem(COMPLETED_LEVELS_KEY);
-        console.log("All completed levels cleared from localStorage.");
-    } catch (error) {
-        console.error("Error clearing completed levels from localStorage:", error);
-    }
+  storageManager.clear();
+  console.log('All completed levels cleared from storage.');
 }

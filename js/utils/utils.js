@@ -1,8 +1,16 @@
 /**
+ * Utility functions for SVG coordinate transformations, geometry calculations,
+ * and drawable area detection.
+ * @module utils/utils
+ */
+
+/**
  * Gets SVG coordinates from a mouse or touch event relative to the SVG element.
- * @param {SVGSVGElement} svg - The SVG element.
- * @param {MouseEvent|TouchEvent} event - The mouse or touch event.
- * @returns {{x: number, y: number}|null} The coordinates or null if failed.
+ * Converts client (screen) coordinates to SVG coordinate space using the SVG's transformation matrix.
+ *
+ * @param {SVGSVGElement} svg - The SVG element
+ * @param {MouseEvent|TouchEvent|Object} event - The mouse/touch event or object with clientX/clientY
+ * @returns {{x: number, y: number}|null} The SVG coordinates or null if conversion fails
  */
 export function getSVGCoordinates(svg, event) {
   if (!svg) return null;
@@ -25,31 +33,32 @@ export function getSVGCoordinates(svg, event) {
     return null; // No valid coordinates found
   }
 
-
   pt.x = clientX;
   pt.y = clientY;
 
   try {
     const ctm = svg.getScreenCTM();
     if (!ctm) {
-      console.error("SVG getScreenCTM is null.");
+      console.error('SVG getScreenCTM is null.');
       return null;
     }
     const svgPoint = pt.matrixTransform(ctm.inverse());
     return { x: svgPoint.x, y: svgPoint.y };
   } catch (error) {
-    console.error("Error transforming screen coordinates to SVG coordinates:", error);
+    console.error('Error transforming screen coordinates to SVG coordinates:', error);
     return null;
   }
 }
 
 /**
  * Checks if a line segment intersects with a rectangle's bounding box.
- * Uses a simplified Liang-Barsky algorithm approach.
- * @param {{x: number, y: number}} p1 - Start point of the line segment.
- * @param {{x: number, y: number}} p2 - End point of the line segment.
- * @param {SVGRectElement} rect - The rectangle element.
- * @returns {boolean} True if the line segment intersects the rectangle.
+ * Uses a simplified Liang-Barsky algorithm for efficient line-rectangle intersection testing.
+ * This is used to detect when the drawn path crosses a bridge.
+ *
+ * @param {{x: number, y: number}} p1 - Start point of the line segment
+ * @param {{x: number, y: number}} p2 - End point of the line segment
+ * @param {SVGRectElement} rect - The rectangle element to test against
+ * @returns {boolean} True if the line segment intersects the rectangle
  */
 export function lineSegmentIntersectsRect(p1, p2, rect) {
   try {
@@ -70,22 +79,25 @@ export function lineSegmentIntersectsRect(p1, p2, rect) {
     }
 
     // Simplified Liang-Barsky algorithm
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
     let t0 = 0.0;
     let t1 = 1.0;
     const p = [-dx, dx, -dy, dy];
     const q = [p1.x - rectMinX, rectMaxX - p1.x, p1.y - rectMinY, rectMaxY - p1.y];
 
     for (let i = 0; i < 4; i++) {
-      if (p[i] === 0) { // Line parallel to edge
+      if (p[i] === 0) {
+        // Line parallel to edge
         if (q[i] < 0) return false; // Parallel and outside
       } else {
         const r = q[i] / p[i];
-        if (p[i] < 0) { // Line proceeds outside to inside
+        if (p[i] < 0) {
+          // Line proceeds outside to inside
           if (r > t1) return false;
           if (r > t0) t0 = r;
-        } else { // Line proceeds inside to outside (p[i] > 0)
+        } else {
+          // Line proceeds inside to outside (p[i] > 0)
           if (r < t0) return false;
           if (r < t1) t1 = r;
         }
@@ -95,18 +107,20 @@ export function lineSegmentIntersectsRect(p1, p2, rect) {
     return t0 < t1;
   } catch (error) {
     // Error likely if getBBox fails (e.g., element not rendered)
-    console.error("Error checking line-rectangle intersection:", error, rect);
+    console.error('Error checking line-rectangle intersection:', error, rect);
     return false;
   }
 }
 
 /**
  * Checks if a point (from client coordinates) is over a drawable area (land or bridge) within the SVG.
- * Uses elementFromPoint and traverses up to find data-terrain attributes.
- * @param {number} clientX - Client X coordinate.
- * @param {number} clientY - Client Y coordinate.
- * @param {SVGSVGElement} svgElement - The SVG element.
- * @returns {boolean} True if the point is on a drawable area.
+ * Uses elementFromPoint and traverses up the DOM tree to find data-terrain attributes or bridge elements.
+ * Temporarily disables pointer events on the drawn path to avoid self-detection.
+ *
+ * @param {number} clientX - Client X coordinate (screen space)
+ * @param {number} clientY - Client Y coordinate (screen space)
+ * @param {SVGSVGElement} svgElement - The SVG element containing the game map
+ * @returns {boolean} True if the point is on a drawable area (land or bridge), false otherwise
  */
 export function isPointOnDrawableArea(clientX, clientY, svgElement) {
   if (!svgElement) return false;
@@ -141,7 +155,10 @@ export function isPointOnDrawableArea(clientX, clientY, svgElement) {
       return false; // Found water explicitly
     }
     // Check if it's a bridge (Rect with specific ID format)
-    if (currentElement.tagName.toLowerCase() === 'rect' && currentElement.id.startsWith('bridge-')) {
+    if (
+      currentElement.tagName.toLowerCase() === 'rect' &&
+      currentElement.id.startsWith('bridge-')
+    ) {
       return true; // Found a bridge
     }
     currentElement = currentElement.parentElement;
@@ -153,10 +170,13 @@ export function isPointOnDrawableArea(clientX, clientY, svgElement) {
 
 /**
  * Checks if the exit point from a bridge is on the opposite side relative to the entry point.
- * @param {{x: number, y: number}} entryPoint - The point where the path entered the bridge.
- * @param {{x: number, y: number}} exitPoint - The point where the path exited the bridge.
- * @param {SVGRectElement} bridge - The bridge rectangle element.
- * @returns {boolean} True if the exit is on the opposite side.
+ * Uses angle-based geometry to determine if the path crossed the bridge from one side to another.
+ * This is the core logic for validating that bridges are crossed correctly (not just touched).
+ *
+ * @param {{x: number, y: number}} entryPoint - The point where the path entered the bridge
+ * @param {{x: number, y: number}} exitPoint - The point where the path exited the bridge
+ * @param {SVGRectElement} bridge - The bridge rectangle element
+ * @returns {boolean} True if the exit is on the opposite side (angle difference > 90 degrees)
  */
 export function isOppositeSide(entryPoint, exitPoint, bridge) {
   if (!bridge || !entryPoint || !exitPoint) return false;
@@ -181,33 +201,47 @@ export function isOppositeSide(entryPoint, exitPoint, bridge) {
     // Allow some tolerance
     return angleDifference > Math.PI / 2; // Greater than 90 degrees
   } catch (error) {
-    console.error("Error calculating opposite side:", error);
+    console.error('Error calculating opposite side:', error);
     return false;
   }
 }
 
-/** Debounce function */
+/**
+ * Creates a debounced version of a function that delays execution until after
+ * a specified wait time has elapsed since the last call.
+ *
+ * @param {Function} func - The function to debounce
+ * @param {number} wait - The delay in milliseconds
+ * @returns {Function} The debounced function
+ */
 export function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
     };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
-/** Throttle function */
+/**
+ * Creates a throttled version of a function that only executes at most once
+ * per specified time limit.
+ *
+ * @param {Function} func - The function to throttle
+ * @param {number} limit - The time limit in milliseconds
+ * @returns {Function} The throttled function
+ */
 export function throttle(func, limit) {
-    let inThrottle;
-    return function executedFunction(...args) {
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    };
+  let inThrottle;
+  return function executedFunction(...args) {
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
 }

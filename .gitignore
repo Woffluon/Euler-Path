@@ -1,0 +1,12 @@
+.kiro
+dist
+node_modules
+.vscode
+analysis
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+!.env.example
